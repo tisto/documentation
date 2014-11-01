@@ -8,7 +8,10 @@ Theming Plone
 
    The easiest way to do this is to use "plone.app.theming". But if you need to integrate Plone with other back-end servers, legacy systems, or any webservice, you can use Diazo to all combine it in a unified look & feel.
 
+.. toctree::
+   :maxdepth: 2
 
+   where_to_start
 
 .. toctree::
    :maxdepth: 2
