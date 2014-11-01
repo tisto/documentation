@@ -30,8 +30,8 @@ extensions = [
     #'collective.sphinx.includedoc'
     #'sphinxcontrib.contributors',
     'sphinxcontrib_robotframework',
-    'sphinx.ext.autosummary', 
-    ]
+    'sphinx.ext.autosummary',
+]
 
 # See http://sphinx-doc.org/ext/todo.html#confval-todo_include_todos
 todo_include_todos = True
@@ -62,10 +62,10 @@ trademark_name = "Plone"
 #
 # The short X.Y version.
 version = [
-#    '5.0',
+    '5.0',
     '4.3',
-#    '3.3',
-    ]
+    '3.3',
+]
 # The full version, including alpha/beta/rc tags.
 release = '4.3'
 
@@ -85,6 +85,14 @@ release = '4.3'
 # List of directories, relative to source directory, that shouldn't be searched
 # for source files.
 #exclude_trees = ['old-reference-manuals', 'adapt-and-extend', 'develop', 'working-with-content', 'manage']
+#exclude_trees = [
+#    'old-reference-manuals',
+#    'adapt-and-extend',
+#    'develop',
+#    'working-with-content',
+#    'manage',
+#    'external',
+#]
 
 # The reST default role (used for this markup: `text`) to use for all documents
 #default_role = None
@@ -111,23 +119,32 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  Major themes that come with
 # Sphinx are currently 'default' and 'sphinxdoc'.
-html_theme = 'plone_org_4'
+#html_theme = 'plone_classic'  # for Plone 3 documentation
+html_theme = 'plone_org_4'  # for Plone 4 documentation
+#html_theme = 'plone_org_5'  # for Plone 5 documentation
 import sphinx.themes.plone
-html_theme_path = sphinx.themes.plone.get_html_theme_path() 
+html_theme_path = sphinx.themes.plone.get_html_theme_path()
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #html_theme_options = {}
 html_theme_options = {
-#	"rightsidebar": "false",
-    'doc_languages' : [
-#        {'lang_code':'en','lang_name':'English'}, 
-#        {'lang_code':'de','lang_name':'German'}, 
-#        {'lang_code':'it','lang_name':'Italian'}, 
-        ],
-    'doc_language'  : 'en',
-    'trademark_name' : 'Plone',
+    # "rightsidebar": "false",
+    'doc_languages': [
+        {'lang_code': 'en', 'lang_name': 'English'},
+        {'lang_code': 'de', 'lang_name': 'German'},
+        {'lang_code': 'it', 'lang_name': 'Italian'},
+    ],
+    'doc_language': 'en',
+    'trademark_name': 'Plone',
+    'searchbox': True,
+    'use_ga': True,
+    'googleanalytics_id': 'UA-1907133-6',
+    'googleanalytics_domain': 'plone.org',
+    'googleanalytics_path': '/',
+    'external_topbar': False,
+    'version_switcher': True,
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -135,7 +152,9 @@ html_theme_options = {
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
-html_title = '%(project)s v%(release)s' % {'project': project, 'release': release}
+html_title = '%(project)s v%(release)s' % {
+    'project': project,
+    'release': release}
 
 # A shorter title for the navigation bar.  Default is the same as html_title.
 #html_short_title = None
