@@ -17,6 +17,7 @@ Theming Plone
    /external/diazo/docs/index
    theme_product_with_diazo
    quick_test
+   resources
 
 Using Diazo is also possible as a standalone service. That makes it possible to include several back-end applications under one 'look'
 
