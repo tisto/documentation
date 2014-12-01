@@ -16,3 +16,11 @@ December Release 2014:
 - improvments of Plone 3 docs
 - add docs about workflow-state
 - add docs about 'egg releases'
+- theme imporvements
+
+For a full list of all changes please check:
+
+https://github.com/plone/papyrus/commits/master
+https://github.com/plone/documentation/commits/master
+https://github.com/plone/documentation/commits/3.3
+https://github.com/plone/sphinx.themes.plone/commits/master
