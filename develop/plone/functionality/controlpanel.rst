@@ -10,118 +10,184 @@
 .. contents:: :local:
 
 Introduction
-=============
+------------
 
-This documentation tells you how to create new "configlets" to
-Plone site setup control panel.
+Sometimes when you create an add-on product for Plone you need a central storage for configuration settings. Integrators, site administrators, or users should be able to configure your add-on product, or to add information that your add-on product requires to work (e.g. registration key for a third party service).
 
-Configlets can be created in two ways:
-
-* Using the ``plone.app.registry`` configuration framework for Plone
-  (recommended);
-* Using any :doc:`view code </develop/plone/views/browserviews>`.
+This tutorial will explain how you can easily create a Plone control panel that can be used to store add-on specific configuration data. It is based on a real world add-on product, called collective.akismet. collective.akismet provides akismet spam protection for plone.app.discussion comments. It needs to store the site specific akismet key in order to use the third party akismet service.
 
 
-``plone.app.registry``
-=======================
+plone.registry vs. plone.app.registry
+-------------------------------------
 
-``plone.app.registry`` is the state of the art way to add settings for your
-Plone 4.x+ add-ons.
+plone.registry provides debconf-like (or about:config-like) settings registries for Zope applications. A registry, with a dict-like API, is used to get and set values stored in records. Each record contains the actual value, as well as a field that describes the record in more detail. At a minimum, the field contains information about the type of value allowed, as well as a short title describing the record's purpose.
 
-For tutorial and more information please see the
-`PyPi page <https://pypi.python.org/pypi/plone.app.registry>`_.
+plone.app.registry provides the Plone UI integration for plone.registry. plone.app.registry will allow us to create the control panel forms from a simple schema definition.
+Prerequisits
 
-Example products:
+Before you can start with the development of your control panel, you have to make sure that you use the correct KGS (known good set) of Python packages in your buildout. For the current Plone 4.0.2 you have to add this line to your buildout configuration::
 
-* https://pypi.python.org/pypi/collective.gtags
+  [buildout]
+  extends =
+      http://good-py.appspot.com/release/plone.app.registry/1.0b2?plone=4.0.2
 
-* https://plone.org/products/collective.habla
 
-* https://pypi.python.org/pypi/collective.xdv
+Creating the package
+--------------------
 
-Minimal example using ``five.grok``
-------------------------------------
+First we create a simple plone skeleton package with paster (make sure you have paster and ZopeSkel installed)::
 
-Below is a minimal example for creating a configlet using:
+  $ paster create -t plone collective.akismet
 
-* :doc:`grok </appendices/grok>`
 
-* ``plone.app.registry``
+Test first
+----------
 
-It is based on the
-`youraddon template <https://github.com/miohtama/sane_plone_addon_template/blob/master>`_.
-The add-on package in this case is called
-`silvuple <https://github.com/miohtama/silvuple>`_.
+If you do test driven development, you might want to go to the testing section of this tutorial first and start with writing tests before writing code.
+Add plone.app.registry to the package dependencies
 
-In ``buildout.cfg``, make sure you have the ``extends`` line for
-Dexterity (see the
-`Dexterity installation guide
-<https://plone.org/products/dexterity/documentation/how-to/install>`_.
+You have to add plone.app.registry to the list of package dependencies of the newly created package. You do this by adding it to the install_requires section of the setup.py file.
 
-``setup.py``::
+There is no need to add plone.registry as well since plone.registry is a dependency of plone.app.registry.
 
-    install_requires = [..."plone.app.dexterity", "plone.app.registry"],
+setup.py::
 
-``settings.py``::
+  install_requires=[
+      ...
+      'plone.app.registry',
+  ]
 
-    """
 
-        Define add-on settings.
+Defining the schema
+-------------------
 
-    """
+plone.app.registry allows you to create all control panel forms simply by defining a zope schema interface. For the akismet service we will need two fields, "akismet_key" and "akismet_key_site". Both are simple text fields with a description and a default value. See the zope.schema documentation for more options (text field, password field, etc.).
 
-    from zope.interface import Interface
+interfaces.py::
+
+    from z3c.form import interfaces
+
     from zope import schema
-    from five import grok
-    from Products.CMFCore.interfaces import ISiteRoot
+    from zope.interface import Interface
 
-    from plone.z3cform import layout
-    from plone.directives import form
-    from plone.app.registry.browser.controlpanel import RegistryEditForm
-    from plone.app.registry.browser.controlpanel import ControlPanelFormWrapper
+    from zope.i18nmessageid import MessageFactory
 
-    class ISettings(form.Schema):
-        """ Define settings data structure """
+    _ = MessageFactory('collective.akismet')
 
-        adminLanguage = schema.TextLine(title=u"Admin language",
-                description=u"Type two letter language code (admins always use this language)")
 
-    class SettingsEditForm(RegistryEditForm):
+    class IAkismetSettings(Interface):
+        """Global akismet settings. This describes records stored in the
+        configuration registry and obtainable via plone.registry.
         """
-        Define form logic
-        """
-        schema = ISettings
-        label = u"Silvuple settings"
 
-    class SettingsView(grok.CodeView):
-        """
-        View which wrap the settings form using ControlPanelFormWrapper to a HTML boilerplate frame.
-        """
-        grok.name("silvuple-settings")
-        grok.context(ISiteRoot)
-        def render(self):
-            view_factor = layout.wrap_form(SettingsEditForm, ControlPanelFormWrapper)
-            view = view_factor(self.context, self.request)
-            return view()
+        akismet_key = schema.TextLine(title=_(u"Akismet (Wordpress) Key"),
+                                      description=_(u"help_akismet_key",
+                                                    default=u"Enter in your Wordpress key here to "
+                                                             "use Akismet to check for spam in comments."),
+                                      required=False,
+                                      default=u'',)
 
-``profiles/default/controlpanel.xml``
+        akismet_key_site = schema.TextLine(title=_(u"Site URL"),
+                                      description=_(u"help_akismet_key_site",
+                                                    default=u"Enter the URL to this site as per your "
+                                                             "Akismet settings."),
+                                      required=False,
+                                      default=u'',)
 
-.. code-block:: xml
+Creating the control panel
+--------------------------
+
+plone.app.registry allows us to create the control panel from the schema we just defined. We create an edit form that uses the schema fields to automatically create the control panel user interface and a wrapper that wraps the form into a view.
+
+controlpanel.py::
+
+    from plone.app.registry.browser import controlpanel
+
+    from collective.akismet.interfaces import IAkismetSettings, _
+
+
+    class AkismetSettingsEditForm(controlpanel.RegistryEditForm):
+
+        schema = IAkismetSettings
+        label = _(u"Akismet settings")
+        description = _(u"""""")
+
+        def updateFields(self):
+            super(AkismetSettingsEditForm, self).updateFields()
+
+
+        def updateWidgets(self):
+            super(AkismetSettingsEditForm, self).updateWidgets()
+
+    class AkismetSettingsControlPanel(controlpanel.ControlPanelFormWrapper):
+        form = AkismetSettingsEditForm
+
+Register the control panel view
+
+Now we have to register the control panel we just created.
+
+configure.zcml::
+
+    <include package="plone.app.registry" />
+
+    <!-- Control panel -->
+    <browser:page
+        name="akismet-settings"
+        for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+        class=".controlpanel.AkismetSettingsControlPanel"
+        permission="cmf.ManagePortal"
+        />
+
+You can test this view if you type this into the URL field of your browser:
+
+http://localhost:8080/@@akismet-settings
+
+Generic Setup
+-------------
+
+Since we finished creating the control panel, we have to integrate it into Plone by writing a generic setup profile for the product.
+
+We also add plone.app.registry as a dependency, to make sure it is automatically installed when we install our product.
+
+configure.zcml::
+
+    <configure
+        xmlns="http://namespaces.zope.org/zope"
+        xmlns:five="http://namespaces.zope.org/five"
+        xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
+        xmlns:i18n="http://namespaces.zope.org/i18n"
+        i18n_domain="collective.akismet">
+
+      <include package="plone.app.registry" />
+
+      <genericsetup:registerProfile
+          name="default"
+          title="Akismet spam protection"
+          directory="profiles/default"
+          description="Provides Akismet spam protection for plone.app.discussion comments."
+          provides="Products.GenericSetup.interfaces.EXTENSION"
+          />
+
+    </configure>
+
+Create a "profiles" and a "default" folder inside. Afterwards, we create a controlpanel.xml file where we register the akismet control panel so it shows up in the Plone control panel.
+
+profiles/default/controlpanel.xml::
 
     <?xml version="1.0"?>
     <object
         name="portal_controlpanel"
         xmlns:i18n="http://xml.zope.org/namespaces/i18n"
-        i18n:domain="silvuple">
+        i18n:domain="collective.akismet"
+        purge="False">
 
         <configlet
-            title="Silvuple Settings"
-            action_id="silvuple.settings"
-            appId="silvuple"
+            title="Akismet"
+            action_id="akismet"
+            appId="collective.akismet"
             category="Products"
             condition_expr=""
-            url_expr="string:${portal_url}/@@silvuple-settings"
-            icon_expr=""
+            url_expr="string:${portal_url}/@@akismet-settings"
             visible="True"
             i18n:attributes="title">
                 <permission>Manage portal</permission>
@@ -129,173 +195,122 @@ Dexterity (see the
 
     </object>
 
-``profiles/default/registry.xml``
+profiles/default/metadata.xml::
 
-.. code-block:: xml
+    <metadata>
+     <version>1</version>
+     <dependencies>
+      <dependency>profile-plone.app.registry:default</dependency>
+     </dependencies>
+    </metadata>
 
+Next, we tell plone.app.registry about the IAkismetSettings interface, so we can look it up easily.
+
+profiles/default/registry.xml::
+
+    <?xml version="1.0"?>
     <registry>
-        <records interface="silvuple.settings.ISettings" prefix="silvuple">
-            <!-- Set default values -->
-
-            <!-- Leave to empty string -->
-            <value key="adminLanguage"></value>
-        </records>
+     <records interface="collective.akismet.interfaces.IAkismetSettings" />
     </registry>
 
-Control panel widget settings
------------------------------------
+Using the registry in Python code
+---------------------------------
 
-``plone.app.registry`` provides the ``RegistryEditForm``
-class, which is a subclass of ``z3c.form.form.Form``.
+Now that we have set up the registry, we can use it in our application. We can retrieve the settings of the akismet registry by querying the registry for the IAkismetSettings interface:
+Accessing the registry
 
-It has two places to override which widgets
-will be used for which field:
+To get or set the value of a record, you must first look up the registry itself. The registry is registered as a local utility, so we can look it up with::
 
-* ``updateFields()`` may set widget factories, i.e. widget type, to be used;
+    >>> from zope.component import getUtility
+    >>> from plone.registry.interfaces import IRegistry
 
-* ``updateWidgets()`` may play with widget properties and widget values
-  shown to the user.
+    >>> registry = getUtility(IRegistry)
 
-Example (``collective.gtags`` project, ``controlpanel.py``)::
+Now we fetch the AkismetSetting registry
 
-    class TagSettingsEditForm(controlpanel.RegistryEditForm):
+    >>> from collective.akismet.interfaces import IAkismetSettings
+    >>> settings = registry.forInterface(IAkismetSettings)
 
-        schema = ITagSettings
-        label = _(u"Tagging settings")
-        description = _(u"Please enter details of available tags")
+And now we can access the values
 
-        def updateFields(self):
-            super(TagSettingsEditForm, self).updateFields()
-            self.fields['tags'].widgetFactory = TextLinesFieldWidget
-            self.fields['unique_categories'].widgetFactory = TextLinesFieldWidget
-            self.fields['required_categories'].widgetFactory = TextLinesFieldWidget
-
-        def updateWidgets(self):
-            super(TagSettingsEditForm, self).updateWidgets()
-            self.widgets['tags'].rows = 8
-            self.widgets['tags'].style = u'width: 30%;'
-
-``plone.app.registry`` imports --- backwards compatibility
------------------------------------------------------------
-
-You need this if you started using ``plone.app.registry`` before April 2010.
-
-There is a change concerning the 1.0b1 codebase::
-
-    try:
-        # plone.app.registry 1.0b1
-        from plone.app.registry.browser.form import RegistryEditForm
-        from plone.app.registry.browser.form import ControlPanelFormWrapper
-    except ImportError:
-        # plone.app.registry 1.0b2+
-        from plone.app.registry.browser.controlpanel import RegistryEditForm
-        from plone.app.registry.browser.controlpanel import ControlPanelFormWrapper
+    >>> self.settings.akismet_key
+    >>> ''
+    >>> self.settings.akismet_key_site
+    >>> ''
 
 
-Configlets without ``plone.registry``
-============================================
+Testing
+-------
 
-Just add ``controlpanel.xml`` pointing to your custom form.
+We won't go into any details about how to set up or run tests here. If you are unfamiliar with testing, please see the Plone testing tutorial. For the complete testing code, see https://svn.plone.org/svn/collective/collective.akismet/trunk/collective/akismet/tests/.
 
-
-Content type choice setting
-=====================================
-
-Often you need to have a setting whether a certain functionality is enabled
-on particular content types.
-
-Here are the ingredients:
-
-* A custom schema-defined interface for settings (``registry.xml`` schemas
-  don't support multiple-choice widgets in ``plone.app.registry`` 1.0b2);
-
-* a vocabulary factory to pull friendly type information out of ``portal_types`` .
-
-``settings.py``::
-
-    """
-
-        Define add-on settings.
-
-    """
-
-    from zope import schema
-    from five import grok
-    from Products.CMFCore.interfaces import ISiteRoot
-    from zope.schema.interfaces import IVocabularyFactory
-
-    from z3c.form.browser.checkbox import CheckBoxFieldWidget
+We create a RegistryTest class that inherits from PloneTestCase and uses the AkismetLayer we set up before. We login as portal owner and set up the AkismetSettings::
 
 
-    from plone.z3cform import layout
-    from plone.directives import form
-    from plone.app.registry.browser.controlpanel import RegistryEditForm
-    from plone.app.registry.browser.controlpanel import ControlPanelFormWrapper
+    class RegistryTest(PloneTestCase):
 
-    class ISettings(form.Schema):
-        """ Define settings data structure """
+        layer = AkismetLayer
 
-        adminLanguage = schema.TextLine(title=u"Admin language", description=u"Type two letter language code and admins always use this language")
+        def afterSetUp(self):
+            # Set up the akismet settings registry
+            self.loginAsPortalOwner()
+            self.registry = Registry()
+            self.registry.registerInterface(IAkismetSettings)
 
-        form.widget(contentTypes=CheckBoxFieldWidget)
-        contentTypes = schema.List(title=u"Enabled content types",
-                                   description=u"Which content types appear on translation master page",
-                                   required=False,
-                                   value_type=schema.Choice(source="plone.app.vocabularies.ReallyUserFriendlyTypes"),
-                                   )
+    First, we test if the akismet control panel view we created is accessable.
 
+        def test_akismet_controlpanel_view(self):
+            view = getMultiAdapter((self.portal, self.portal.REQUEST),
+                                   name="akismet-settings")
+            view = view.__of__(self.portal)
+            self.failUnless(view())
 
-    class SettingsEditForm(RegistryEditForm):
-        """
-        Define form logic
-        """
-        schema = ISettings
-        label = u"Silvuple settings"
+Test that the akismet control panel view is protected and anonymous users can't view or edit the akismet control panel::
 
-    class SettingsView(grok.CodeView):
-        """
+    def test_akismet_controlpanel_view_protected(self):
+        from AccessControl import Unauthorized
+        self.logout()
+        self.assertRaises(Unauthorized,
+                          self.portal.restrictedTraverse,
+                         '@@akismet-settings')
 
-        """
-        grok.name("silvuple-settings")
-        grok.context(ISiteRoot)
-        def render(self):
-            view_factor = layout.wrap_form(SettingsEditForm, ControlPanelFormWrapper)
-            view = view_factor(self.context, self.request)
-            return view()
+Test if the two records we created for the akismet control panel can be retrieved from the AkismetSettings registry::
 
-``profiles/default/registry.xml``:
+    def test_record_akismet_key(self):
+        # Test that the akismet_key record is in the control panel
+        record_akismet_key = self.registry.records[
+            'collective.akismet.interfaces.IAkismetSettings.akismet_key']
+        self.failUnless('akismet_key' in IAkismetSettings)
+        self.assertEquals(record_akismet_key.value, u"")
 
-.. code-block:: xml
+    def test_record_akismet_key_site(self):
+        record_akismet_key_site = self.registry.records[
+            'collective.akismet.interfaces.IAkismetSettings.akismet_key_site']
+        self.failUnless('akismet_key_site' in IAkismetSettings)
+        self.assertEquals(record_akismet_key_site.value, u"")
 
-    <registry>
-        <records interface="silvuple.settings.ISettings" prefix="silvuple.settings.ISettings">
-            <!-- Set default values -->
+As last step, set up the test loader::
 
+    def test_suite():
+        return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
-            <value key="contentTypes" purge="false">
-                <element>Document</element>
-                <element>News Item</element>
-                <element>Folder</element>
-            </value>
-        </records>
+Further reading
+---------------
 
-    </registry>
+You learned how to set up a add-on product registry from a zope interface definition and how to retrieve these settings in your Python application code.
 
+See the plone.app.registry and plone.registry documentation for further information:
 
-Configuring Plone products from buildout
-========================================
+    http://pypi.python.org/pypi/plone.app.registry
+    http://pypi.python.org/pypi/plone.registry
 
-See a section in the
-:ref:`Buildout chapter <configuring-products-from-buildout>`
+Example Usage
 
+    https://github.com/collective/collective.akismet
+    https://github.com/plone/plone.formwidget.recaptcha/
+    https://github.com/plone/plone.app.discussion
 
-Configuration using environment variables
-=========================================
+Advanced
 
-If your add-on requires "setting file"
-for few simple settings you can change for each
-buildout you can use operating system environment variables.
+    Getting registry settings in Plone to display in fieldsets
 
-For example, see:
-
-* https://pypi.python.org/pypi/Products.LongRequestLogger
